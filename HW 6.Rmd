@@ -31,7 +31,7 @@ mutate(
 )
 ```
 
-_RDetermine the best model_
+_Determine the best model_
 ```{r}
 library(MASS)
 full.model = lm(bwt ~., data = btw)
@@ -76,7 +76,7 @@ cv_df =
          rmse_a = map2_dbl(model_a, test, ~rmse(model = .x, data = .y)),
          rmse_b = map2_dbl(model_b, test, ~rmse(model = .x, data = .y)))
 ``` 
-
+_Compare the cross validated prediction errors of the three models_
 ```{r}
   cv_df %>% 
   dplyr::select(starts_with("rmse")) %>% 
@@ -88,6 +88,8 @@ cv_df =
   mutate(model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
+Model a has the highest rmse, and model best (the model I created) shows the lowest rmse. From this visual comparison I would conclude that my model does the best at predicting baby birthweight. 
+
 
 # Problem 2
 
@@ -106,6 +108,7 @@ weather_df =
   dplyr::select(name, id, everything())
 ```
 
+_Take 5000 bootstrap samples_
 ```{r}
 boot_straps = 
   weather_df %>% 
@@ -124,7 +127,8 @@ pivot_wider(names_from = "term",
    logbetas = log(intercept*tmin)
  ) 
 ```
- 
+
+_Plot the distribution of the two estimates_
 ```{r}
 boot_straps %>%
 ggplot(aes(x = r_squared)) + geom_histogram() 
@@ -132,6 +136,7 @@ ggplot(aes(x = r_squared)) + geom_histogram()
 boot_straps %>%
 ggplot(aes(x = logbetas)) + geom_histogram()
 ```
+The distributo of r_sqaured is relatively normal but slightly left skewed. The distribution of logbetas is normal for the most part. 
 
 _Identify the quantiles to provide a CI_
 ```{r}
@@ -141,5 +146,6 @@ _Identify the quantiles to provide a CI_
   quantile(pull(boot_straps, logbetas), probs = c(.025, .975)) %>%
   knitr::kable(digits = 3)
 ```
+The 95% confidence interval for r_sqaured is (0.894, 0.927) and the confidence interval for log(beta0 * beta1) is (1.956, 2.059)
   
   
