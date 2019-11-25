@@ -1,0 +1,119 @@
+---
+title: "HW 6"
+author: "Sarah Munro"
+date: "11/24/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
+library(mgcv)
+library(modelr)
+library(purrr)
+
+set.seed(1)
+```
+
+# Problem 1
+
+_Load and tidy the dataset_
+```{r}
+btw = read_csv("./Data/birthweight.csv") %>%
+  janitor::clean_names() %>%
+  drop_na() %>%
+mutate(
+  babysex = as.factor(babysex),
+  frace = as.factor(frace),
+  mrace = as.factor(mrace),
+  malform = as.factor(malform)
+)
+```
+
+_RDetermine the best model_
+```{r}
+library(MASS)
+full.model = lm(bwt ~., data = btw)
+step.model = stepAIC(full.model, direction = "both", 
+                      trace = FALSE)
+summary(step.model)
+```
+
+_I used a stepwise regression to determine the best model by AIC, the resulting model is specified below_
+```{r}
+model_best = lm(bwt ~ babysex + bhead + blength + delwt + fincome + 
+    gaweeks + mheight + mrace + parity + ppwt + smoken, data = btw)
+
+
+model_best %>%  
+broom::tidy() 
+```
+
+_Plot a model of residuals against fitted values_
+```{r}
+modelr::add_residuals(btw, model_best) %>%
+modelr::add_predictions(model_best) %>%
+ggplot(aes(x = pred, y = resid)) + geom_violin()
+```
+
+```{r}
+cv_df = 
+  crossv_mc(btw, 100) %>%
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+```
+
+```{r}
+cv_df = 
+  cv_df %>% 
+  mutate(
+        model_best  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken, data = .x)),
+         model_a  = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+         model_b  = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex + bhead * blength * babysex, data = .x))) %>%  
+  mutate(rmse_best = map2_dbl(model_best, test, ~rmse(model = .x, data = .y)),
+         rmse_a = map2_dbl(model_a, test, ~rmse(model = .x, data = .y)),
+         rmse_b = map2_dbl(model_b, test, ~rmse(model = .x, data = .y)))
+``` 
+
+```{r}
+  cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+# Problem 2
+
+_Load the dataset_
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+```{r}
+boot_straps = 
+  weather_df %>% 
+  modelr::bootstrap(n = 5000) %>%
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::tidy)) %>% 
+  select(-strap_sample, -models) %>% 
+  unnest(results) %>% 
+  group_by()
+```
