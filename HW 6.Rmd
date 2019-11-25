@@ -79,7 +79,7 @@ cv_df =
 
 ```{r}
   cv_df %>% 
-  select(starts_with("rmse")) %>% 
+  dplyr::select(starts_with("rmse")) %>% 
   pivot_longer(
     everything(),
     names_to = "model", 
@@ -103,7 +103,7 @@ weather_df =
     name = recode(id, USW00094728 = "CentralPark_NY"),
     tmin = tmin / 10,
     tmax = tmax / 10) %>%
-  select(name, id, everything())
+  dplyr::select(name, id, everything())
 ```
 
 ```{r}
@@ -111,9 +111,35 @@ boot_straps =
   weather_df %>% 
   modelr::bootstrap(n = 5000) %>%
   mutate(
-    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
-    results = map(models, broom::tidy)) %>% 
-  select(-strap_sample, -models) %>% 
-  unnest(results) %>% 
-  group_by()
+    models = map(strap, ~lm(tmax ~ tmin, data = .x)),
+    gresults = map(models, broom::glance), 
+    tresults = map(models, broom::tidy)) %>%
+  dplyr::select(-strap, -models) %>% 
+  unnest() %>%
+dplyr::select(.id, r.squared, term, estimate)  %>%
+pivot_wider(names_from = "term",
+            values_from = "estimate") %>%
+  janitor::clean_names() %>%
+ mutate(
+   logbetas = log(intercept*tmin)
+ ) 
 ```
+ 
+```{r}
+boot_straps %>%
+ggplot(aes(x = r_squared)) + geom_histogram() 
+
+boot_straps %>%
+ggplot(aes(x = logbetas)) + geom_histogram()
+```
+
+_Identify the quantiles to provide a CI_
+```{r}
+  quantile(pull(boot_straps, r_squared), probs = c(.025, .975)) %>%
+  knitr::kable(digits = 3)
+
+  quantile(pull(boot_straps, logbetas), probs = c(.025, .975)) %>%
+  knitr::kable(digits = 3)
+```
+  
+  
